@@ -1,453 +1,175 @@
-"""
-Клиент для NLP микросервиса
-"""
-
 import requests
-import json
-import time
-import sys
-from typing import Dict, Any, Optional
 
+SERVER_URL = "http://127.0.0.1:8000"
+CORPUS_FILE = "Корпус_Дмитрий.txt"
 
-class NLPClient:
-    """Клиент для взаимодействия с NLP микросервисом"""
+documents = []
 
-    def init(self, base_url: str = "http://localhost:8000"):
-        """
-        Инициализация клиента
+def print_matrix(matrix):
+    """Вывод матрицы с возможностью ограничения по строкам и столбцам."""
+    if not matrix:
+        print("Матрица пуста")
+        return
+    
+    n_rows = input(f"Сколько строк выводить? (Enter = все {len(matrix)}): ")
+    n_rows = int(n_rows) if n_rows.isdigit() else len(matrix)
+    
+    n_cols = input(f"Сколько столбцов выводить? (Enter = все {len(matrix[0])}): ")
+    n_cols = int(n_cols) if n_cols.isdigit() else len(matrix[0])
+    
+    for row in matrix[:n_rows]:
+        print(row[:n_cols])
 
-        Args:
-            base_url: Базовый URL сервера
-        """
-        self.base_url = base_url
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "NLP-Microservice-Client/1.0"
-        })
-
-    def check_connection(self) -> bool:
-        """
-        Проверка подключения к серверу
-
-        Returns:
-            bool: True если сервер доступен
-        """
+def handle_nltk_function(function_name, endpoint_name):
+    """Обработчик для всех NLTK функций."""
+    if not documents:
+        print("Сначала загрузите корпус!")
+        return
+    
+    n_docs = input(f"Сколько документов обработать? (Enter = все {len(documents)}): ")
+    n_docs = int(n_docs) if n_docs.isdigit() else len(documents)
+    
+    print(f"\n{function_name} для {n_docs} документов:")
+    for i, doc in enumerate(documents[:n_docs]):
         try:
-            response = self.session.get(f"{self.base_url}/", timeout=5)
-            return response.status_code == 200
-        except requests.exceptions.RequestException:
-            return False
-
-    def get_server_info(self) -> Dict[str, Any]:
-        """
-        Получение информации о сервере
-        """
-        try:
-            response = self.session.get(f"{self.base_url}/")
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": f"Connection failed: {str(e)}"}
-
-    def get_tfidf(self) -> Dict[str, Any]:
-        """
-        Получение TF-IDF матрицы
-        """
-        try:
-            response = self.session.post(f"{self.base_url}/tf-idf")
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def bag_of_words(self, text: str) -> Dict[str, Any]:
-        """
-        Преобразование текста в Bag-of-Words
-
-        Args:
-            text: Текст для обработки
-        """
-        try:
-            response = self.session.get(
-                f"{self.base_url}/bag-of-words",
-                params={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def lsa_analysis(self, n_components: int = 2) -> Dict[str, Any]:
-        """
-        Латентный семантический анализ
-
-        Args:
-            n_components: Количество компонент
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/lsa",
-                params={"n_components": n_components}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def tokenize(self, text: str) -> Dict[str, Any]:
-        """
-        Токенизация текста
-
-        Args:
-            text: Текст для токенизации
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/text_nltk/tokenize",
-                data={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def stem(self, text: str) -> Dict[str, Any]:
-        """
-        Стемминг текста
-
-        Args:
-            text: Текст для стемминга
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/text_nltk/stem",
-                data={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def lemmatize(self, text: str) -> Dict[str, Any]:
-        """
-        Лемматизация текста
-Args:
-            text: Текст для лемматизации
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/text_nltk/lemmatize",
-                data={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def pos_tagging(self, text: str) -> Dict[str, Any]:
-        """
-        Частеречная разметка
-
-        Args:
-            text: Текст для POS тегирования
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/text_nltk/pos",
-                data={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def ner(self, text: str) -> Dict[str, Any]:
-        """
-        Распознавание именованных сущностей
-
-        Args:
-            text: Текст для NER
-        """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/text_nltk/ner",
-                data={"text": text}
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e)}
-
-    def run_demo(self):
-        """
-        Запуск демонстрации всех функций
-        """
-        print("=" * 60)
-        print("NLP MICROSERVICE DEMO")
-        print("=" * 60)
-
-        # Проверка подключения
-        print("\n1. Проверка подключения к серверу...")
-        if not self.check_connection():
-            print("   ❌ Сервер не доступен!")
-            print(f"   Убедитесь, что сервер запущен на {self.base_url}")
-            return
-
-        server_info = self.get_server_info()
-        print(f"   ✅ Сервер доступен")
-        print(f"   Версия: {server_info.get('version', 'N/A')}")
-        print(f"   Документов в корпусе: {server_info.get('corpus_info', {}).get('documents', 0)}")
-
-        # TF-IDF
-        print("\n2. TF-IDF матрица...")
-        tfidf = self.get_tfidf()
-        if "error" not in tfidf:
-            shape = tfidf.get("shape", {})
-            print(f"   ✅ Размер матрицы: {shape.get('rows', 0)}x{shape.get('cols', 0)}")
-        else:
-            print(f"   ❌ Ошибка: {tfidf['error']}")
-
-        # Bag-of-Words
-        print("\n3. Bag-of-Words...")
-        test_text = "машинное обучение python программирование"
-        bow = self.bag_of_words(test_text)
-        if "error" not in bow:
-            vector = bow.get("vector", [])
-            print(f"   ✅ Текст: '{test_text}'")
-            print(f"   Размер вектора: {len(vector)}")
-            print(f"   Найдено слов: {len(bow.get('found_words', []))}")
-        else:
-            print(f"   ❌ Ошибка: {bow['error']}")
-
-        # LSA
-        print("\n4. LSA анализ...")
-        lsa = self.lsa_analysis(2)
-        if "error" not in lsa:
-            matrix = lsa.get("matrix", [])
-            print(f"   ✅ Размер LSA матрицы: {len(matrix)}x{len(matrix[0]) if matrix else 0}")
-            print(f"   Объясненная дисперсия: {lsa.get('total_variance', 0):.2%}")
-        else:
-            print(f"   ❌ Ошибка: {lsa['error']}")
-
-        # NLTK функции
-        print("\n5. NLTK функции (английский текст)...")
-        eng_text = "FastAPI is a modern web framework for building APIs with Python 3.7+"
-
-        # Токенизация
-        tokens = self.tokenize(eng_text)
-        if "error" not in tokens:
-            print(f"   ✅ Токенизация: {len(tokens.get('tokens', []))} токенов")
-
-        # Стемминг
-        stems = self.stem(eng_text)
-        if "error" not in stems:
-            print(f"   ✅ Стемминг: {len(stems.get('stems', []))} стемм")
-
-        # POS тегирование
-        pos = self.pos_tagging(eng_text)
-        if "error" not in pos:
-            print(f"   ✅ POS тегирование: {len(pos.get('pos_tags', []))} тегов")
-
-        # Пример на русском
-        print("\n6. Пример на русском языке...")
-        rus_text = "Московский государственный университет был основан в 1755 году."
-
-        # Токенизация русского текста
-        rus_tokens = self.tokenize(rus_text)
-        if "error" not in rus_tokens:
-            print(f"   ✅ Токенизация (русский): {rus_tokens.get('tokens', [])}")
-
-        # NER для русского текста
-        rus_ner = self.ner(rus_text)
-        if "error" not in rus_ner:
-            entities = rus_ner.get("entities", [])
-            print(f"   ✅ NER найдено сущностей: {len(entities)}")
-            for entity in entities:
-                print(f"      - {entity['entity']} ({entity['type']})")
-
-        print("\n" + "=" * 60)
-        print("ДЕМОНСТРАЦИЯ ЗАВЕРШЕНА")
-        print("=" * 60)
-
-
-def interactive_mode(client: NLPClient):
-    """
-    Интерактивный режим работы с клиентом
-    """
-    print("\n" + "=" * 60)
-    print("ИНТЕРАКТИВНЫЙ РЕЖИМ")
-    print("=" * 60)
-
-    menu = {
-        "1": "TF-IDF матрица",
-        "2": "Bag-of-Words",
-        "3": "LSA анализ",
-        "4": "Токенизация",
-        "5": "Стемминг",
-        "6": "Лемматизация",
-        "7": "POS тегирование",
-        "8": "NER",
-        "9": "Информация о сервере",
-        "0": "Выход"
-    }
-
-    while True:
-        print("\n" + "-" * 40)
-        print("МЕНЮ:")
-        for key, value in menu.items():
-            print(f"  {key} - {value}")
-        print("-" * 40)
-
-        try:
-            choice = input("\nВыберите действие: ").strip()
-
-            if choice == "0":
-                print("Выход из программы.")
-                break
-
-            elif choice == "1":
-                result = client.get_tfidf()
-                if "error" not in result:
-                    shape = result.get("shape", {})
-                    print(f"\nTF-IDF матрица:")
-                    print(f"  Размер: {shape.get('rows', 0)}x{shape.get('cols', 0)}")
-                    print(f"  Документов: {len(result.get('documents', []))}")
-                    print(f"  Словарь: {len(result.get('vocabulary', []))} слов")
+            response = requests.post(f"{SERVER_URL}/text_nltk/{endpoint_name}", 
+                                     json={"text": doc})
+            data = response.json()
+            
+            if "error" in data:
+                print(f"Ошибка в документе {i+1}: {data['error']}")
+                continue
+                
+            print(f"\nДокумент {i+1}: {doc[:50]}{'...' if len(doc) > 50 else ''}")
+            
+            if endpoint_name == "tokenize":
+                print(f"Токены: {data.get('tokens', [])}")
+            elif endpoint_name == "stem":
+                print(f"Стеммы: {data.get('stems', [])}")
+            elif endpoint_name == "lemmatize":
+                print(f"Леммы: {data.get('lemmas', [])}")
+            elif endpoint_name == "pos":
+                print("POS-теги:")
+                for word, tag in data.get('pos_tags', []):
+                    print(f"  {word}: {tag}")
+            elif endpoint_name == "ner":
+                entities = data.get('entities', [])
+                if entities:
+                    print("Найденные сущности:")
+                    for entity in entities:
+                        print(f"  {entity['entity']} ({entity['type']})")
                 else:
-                    print(f"Ошибка: {result['error']}")
-
-            elif choice == "2":
-                text = input("Введите текст: ").strip()
-                if text:
-                    result = client.bag_of_words(text)
-                    if "error" not in result:
-                        vector = result.get("vector", [])
-                        found = result.get("found_words", [])
-                        print(f"\nBag-of-Words для: '{text}'")
-                        print(f"  Размер вектора: {len(vector)}")
-                        print(f"  Найдено слов: {len(found)}")
-                        print(f"  Слова: {found}")
-                    else:
-                        print(f"Ошибка: {result['error']}")
-                else:
-                    print("Текст не может быть пустым!")
-
-            elif choice == "3":
-                try:
-                    n = input("Количество компонент [2]: ").strip()
-                    n = int(n) if n else 2
-                    result = client.lsa_analysis(n)
-                    if "error" not in result:
-                        matrix = result.get("matrix", [])
-                        variance = result.get("total_variance", 0)
-                        print(f"\nLSA анализ с {n} компонентами:")
-                        print(f"  Размер матрицы: {len(matrix)}x{len(matrix[0]) if matrix else 0}")
-                        print(f"  Объясненная дисперсия: {variance:.2%}")
-                    else:
-                        print(f"Ошибка: {result['error']}")
-                except ValueError:
-                    print("Ошибка: введите число")
-
-            elif choice in ["4", "5", "6", "7", "8"]:
-                text = input("Введите текст для анализа: ").strip()
-                if text:
-                    if choice == "4":
-                        result = client.tokenize(text)
-                        func_name = "Токенизация"
-                    elif choice == "5":
-                        result = client.stem(text)
-                        func_name = "Стемминг"
-                    elif choice == "6":
-                        result = client.lemmatize(text)
-                        func_name = "Лемматизация"
-                    elif choice == "7":
-                        result = client.pos_tagging(text)
-                        func_name = "POS тегирование"
-                    elif choice == "8":
-                        result = client.ner(text)
-                        func_name = "NER"
-
-                    if "error" not in result:
-                        print(f"\n{func_name} для: '{text}'")
-                        if choice == "4":
-                            print(f"  Токены: {result.get('tokens', [])}")
-                        elif choice == "5":
-                            print(f"  Стеммы: {result.get('stems', [])}")
-                        elif choice == "6":
-                            print(f"  Леммы: {result.get('lemmas', [])}")
-                        elif choice == "7":
-                            print(f"  POS теги: {result.get('pos_tags', [])}")
-                        elif choice == "8":
-                            entities = result.get("entities", [])
-                            print(f"  Найдено сущностей: {len(entities)}")
-                            for entity in entities:
-                                print(f"    - {entity['entity']} ({entity['type']})")
-                    else:
-                        print(f"Ошибка: {result['error']}")
-                else:
-                    print("Текст не может быть пустым!")
-
-            elif choice == "9":
-                result = client.get_server_info()
-                print("\nИнформация о сервере:")
-                for key, value in result.items():
-                    print(f"  {key}: {value}")
-
-            else:
-                print("Неизвестная команда. Попробуйте снова.")
-
-        except KeyboardInterrupt:
-            print("\n\nПрограмма прервана пользователем.")
-            break
+                    print("Сущности не найдены")
         except Exception as e:
-            print(f"Ошибка: {e}")
+            print(f"Ошибка при обработке документа {i+1}: {e}")
 
+while True:
+    print("\n===== NLP Клиент =====")
+    print("1. Загрузить корпус")
+    print("2. TF-IDF")
+    print("3. Bag-of-Words")
+    print("4. LSA")
+    print("5. NLTK функции")
+    print("0. Выход")
+    choice = input("Выберите действие: ")
 
-def main():
-    """
-    Основная функция клиента
-    """
-    import argparse
+    if choice == "1":
+        try:
+            with open(CORPUS_FILE, encoding="utf-8") as f:
+                documents = [line.strip() for line in f if line.strip()]
+            print(f"Загружено документов: {len(documents)}")
+            response = requests.post(f"{SERVER_URL}/corpus/load", json=documents)
+            result = response.json()
+            if "error" in result:
+                print(f"Ошибка: {result['error']}")
+            else:
+                print(f"Corpus load: {result}")
+        except FileNotFoundError:
+            print(f"Файл {CORPUS_FILE} не найден!")
 
-    parser = argparse.ArgumentParser(description="Клиент для NLP микросервиса")
-    parser.add_argument(
-        "--url",
-        default="http://localhost:8000",
-        help="URL сервера (по умолчанию: http://localhost:8000)"
-    )
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Запустить демонстрацию"
-    )
-    parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Запустить интерактивный режим"
-    )
+    elif choice == "2":
+        if not documents:
+            print("Сначала загрузите корпус!")
+        else:
+            response = requests.post(f"{SERVER_URL}/tf-idf")
+            if response.status_code == 200:
+                matrix = response.json()
+                if isinstance(matrix, dict) and "error" in matrix:
+                    print(f"Ошибка: {matrix['error']}")
+                else:
+                    print("TF-IDF shape:", (len(matrix), len(matrix[0]) if matrix else 0))
+                    print_matrix(matrix)
+            else:
+                print(f"Ошибка сервера: {response.status_code}")
 
-    args = parser.parse_args()
+    elif choice == "3":
+        if not documents:
+            print("Сначала загрузите корпус!")
+        else:
+            n_docs = input("Сколько документов выводить? (Enter = все): ")
+            n_docs = int(n_docs) if n_docs.isdigit() else len(documents)
+            
+            print(f"Bag-of-Words для {n_docs} документов:")
+            for i, doc in enumerate(documents[:n_docs]):
+                response = requests.get(f"{SERVER_URL}/bag-of-words", params={"text": doc})
+                if response.status_code == 200:
+                    vector = response.json()
+                    if isinstance(vector, dict) and "error" in vector:
+                        print(f"Ошибка в документе {i+1}: {vector['error']}")
+                    else:
+                        print(f"\nДокумент {i+1}: {doc[:50]}{'...' if len(doc) > 50 else ''}")
+                        print(f"Вектор: {vector}")
+                        print(f"Длина вектора: {len(vector)}")
+                else:
+                    print(f"Ошибка сервера для документа {i+1}: {response.status_code}")
 
-    # Создание клиента
-    client = NLPClient(base_url=args.url)
+    elif choice == "4":
+        if not documents:
+            print("Сначала загрузите корпус!")
+        else:
+            n = input("Введите количество компонентов LSA (по умолчанию 2): ")
+            n = int(n) if n.isdigit() else 2
+            response = requests.post(f"{SERVER_URL}/lsa", params={"n_components": n})
+            if response.status_code == 200:
+                data = response.json()
+                if "error" in data:
+                    print(f"Ошибка: {data['error']}")
+                else:
+                    print("Total variance:", data.get("total_variance", "N/A"))
+                    print("LSA shape:", (len(data["matrix"]), len(data["matrix"][0])))
+                    print_matrix(data["matrix"])
+            else:
+                print(f"Ошибка сервера: {response.status_code}")
 
-    # Проверка подключения
-    if not client.check_connection():
-        print(f"❌ Не удалось подключиться к серверу по адресу: {args.url}")
-        print("Убедитесь, что сервер запущен:")
-        print("  python -m server.main")
-        print("  или")
-        print("  uvicorn server.main:app --reload")
-        sys.exit(1)
+    elif choice == "5":
+        print("\n===== NLTK Функции =====")
+        print("1. Токенизация")
+        print("2. Стемминг")
+        print("3. Лемматизация")
+        print("4. Части речи (POS)")
+        print("5. Распознавание сущностей (NER)")
+        print("0. Назад")
+        
+        nltk_choice = input("Выберите NLTK функцию: ")
+        
+        if nltk_choice == "1":
+            handle_nltk_function("Токенизация", "tokenize")
+        elif nltk_choice == "2":
+            handle_nltk_function("Стемминг", "stem")
+        elif nltk_choice == "3":
+            handle_nltk_function("Лемматизация", "lemmatize")
+        elif nltk_choice == "4":
+            handle_nltk_function("Части речи (POS)", "pos")
+        elif nltk_choice == "5":
+            handle_nltk_function("Распознавание сущностей (NER)", "ner")
+        elif nltk_choice == "0":
+            continue
+        else:
+            print("Неверный выбор")
 
-    # Запуск режима
-    if args.demo:
-        client.run_demo()
-    elif args.interactive:
-        interactive_mode(client)
+    elif choice == "0":
+        print("Выход")
+        break
+
     else:
-        # По умолчанию запускаем демо
-        client.run_demo()
-
-
-if name == "main":
-    main()
+        print("Неверный выбор, попробуйте снова.")
