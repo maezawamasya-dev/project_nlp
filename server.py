@@ -3,129 +3,126 @@ import nltk
 from fastapi import FastAPI
 from sklearn.decomposition import TruncatedSVD
 
-nltk.download([
-    "punkt",
-    "averaged_perceptron_tagger",
-    "wordnet",
-    "omw-1.4",
-    "maxent_ne_chunker",
-    "words"
-])
+# -------------------- NLTK --------------------
+nltk.download('punkt') #  алгоритм для разбиения текста на слова и предложения
+nltk.download('averaged_perceptron_tagger_eng') # определение грамматических категорий слов
+nltk.download('wordnet') # семантическая сеть, где слова сгруппированы по значению (приведение слов к начальной форме)
+nltk.download('omw-1.4') # 
+nltk.download('maxent_ne_chunker') # распознавание именованных сущностей
+nltk.download('words') # загрузка словаря
 
-app = FastAPI(title="NLP Microservice")
+# -------------------- APP --------------------
+app = FastAPI()
 
-# ---------- Загрузка корпуса ----------
-def load_corpus():
-    try:
-        with open("Корпус_Дмитрий.txt", encoding="utf-8") as f:
-            docs = []
-            for line in f:
-                line = line.strip().lower()
-                if line:
-                    docs.append(line)
-            return docs
-    except FileNotFoundError:
-        return ["файл корпус_дмитрий.txt не найден"]
+# -------------------- STATE --------------------
+documents: list[str] = [] # хранит тексты, загруженные пользователем
+tokens: list[list[str]] = [] # список списков строк
+vocabulary: list[str] = [] # хранение всех уникальных слов
+tfidf_matrix: np.ndarray | None = None 
 
-documents = load_corpus()
+# -------------------- API --------------------
 
-# ---------- Предобработка ----------
-tokens = []
-for doc in documents:
-    tokens.append(doc.split())
-
-vocabulary = []
-for doc in tokens:
-    for word in doc:
-        if word not in vocabulary:
-            vocabulary.append(word)
-
-doc_count = len(tokens)
-word_count = len(vocabulary)
-
-# ---------- TF-IDF (NumPy) ----------
-tf = np.zeros((doc_count, word_count))
-df = np.zeros(word_count)
-
-for i in range(doc_count):
-    for j in range(word_count):
-        word = vocabulary[j]
-        tf[i][j] = tokens[i].count(word) / len(tokens[i])
-        if word in tokens[i]:
-            df[j] += 1
-
-idf = np.log((doc_count + 1) / (df + 1)) + 1
-tfidf_matrix = tf * idf
-
-# ---------- API ----------
 @app.get("/")
 def home():
+    return {"status": "ready"}
+
+# ---------- CORPUS LOAD ----------
+@app.post("/corpus/load") # эндпоинт для загрузки корпуса
+def load_corpus(docs: list[str]): # принимает список строк
+    global documents, tokens, vocabulary, tfidf_matrix #  изменяем переменные, объявленные вне функции
+# очистка и нормализация документов
+    documents = [d.strip().lower() for d in docs if d.strip()]
+    tokens = [doc.split() for doc in documents] # токенизация
+    vocabulary = sorted(set(w for doc in tokens for w in doc)) # создание словаря уникальных слов
+# подсчет статистики
+    doc_count = len(tokens)
+    word_count = len(vocabulary)
+
+    tf = np.zeros((doc_count, word_count))
+    df = np.zeros(word_count)
+
+    for i, doc in enumerate(tokens):
+        for word in doc:
+            tf[i, vocabulary.index(word)] += 1
+        tf[i] /= len(doc)
+
+    for j, word in enumerate(vocabulary):
+        df[j] = sum(word in doc for doc in tokens)
+
+    idf = np.log((doc_count + 1) / (df + 1)) + 1
+    tfidf_matrix = tf * idf
+
     return {
-        "status": "ready",
-        "documents_loaded": len(documents)
+        "status": "corpus_loaded",
+        "documents": len(documents),
+        "vocabulary_size": len(vocabulary)
     }
 
+# ---------- TF-IDF ----------
 @app.post("/tf-idf")
 def tf_idf():
-    return {"matrix": tfidf_matrix.tolist()}
+    return tfidf_matrix.tolist() # возвращение матрицы в обычный список списков
 
+# ---------- BAG OF WORDS ----------
 @app.get("/bag-of-words")
-def bag_of_words(text):
+def bag_of_words(text: str):
     words = text.lower().split()
-    vector = np.zeros(word_count, dtype=int)
+    vector = [1 if w in words else 0 for w in vocabulary] # преобразование в вектор
+    return vector
 
-    for i in range(word_count):
-        if vocabulary[i] in words:
-            vector[i] = 1
-
-    return {"vector": vector.tolist()}
-
+# ---------- LSA ----------
 @app.post("/lsa")
-def lsa(n_components=2):
+def lsa(n_components: int = 2):
+    n_components = min(max(1, n_components), min(tfidf_matrix.shape))
     svd = TruncatedSVD(n_components=n_components)
-    result = svd.fit_transform(tfidf_matrix)
-    return {"matrix": result.tolist()}
+    matrix = svd.fit_transform(tfidf_matrix)
 
-# ---------- NLTK ----------
+    return {
+        "matrix": matrix.tolist(),
+        "total_variance": float(svd.explained_variance_ratio_.sum())
+    }
+
+# -------------------- NLTK --------------------
+
 @app.post("/text_nltk/tokenize")
-def tokenize(text):
-    return nltk.word_tokenize(text)
+def tokenize(data: dict):
+    text = data["text"]
+    tokens = nltk.word_tokenize(text)
+    return {"tokens": tokens}
 
 @app.post("/text_nltk/stem")
-def stem(text):
+def stem(data: dict):
+    text = data["text"]
     stemmer = nltk.stem.SnowballStemmer("english")
-    result = []
-    for word in nltk.word_tokenize(text):
-        result.append(stemmer.stem(word))
-    return result
+    stems = [stemmer.stem(w) for w in nltk.word_tokenize(text)]
+    return {"stems": stems}
 
 @app.post("/text_nltk/lemmatize")
-def lemmatize(text):
+def lemmatize(data: dict):
+    text = data["text"]
     lemmatizer = nltk.stem.WordNetLemmatizer()
-    result = []
-    for word in nltk.word_tokenize(text):
-        result.append(lemmatizer.lemmatize(word))
-    return result
+    lemmas = [lemmatizer.lemmatize(w) for w in nltk.word_tokenize(text)]
+    return {"lemmas": lemmas}
 
 @app.post("/text_nltk/pos")
-def pos(text):
-    return nltk.pos_tag(nltk.word_tokenize(text))
+def pos(data: dict):
+    text = data["text"]
+    tags = nltk.pos_tag(nltk.word_tokenize(text))
+    return {"pos_tags": tags}
 
 @app.post("/text_nltk/ner")
-def ner(text):
-    tokens = nltk.word_tokenize(text)
-    tags = nltk.pos_tag(tokens)
+def ner(data: dict):
+    text = data["text"]
+    tokens_ = nltk.word_tokenize(text)
+    tags = nltk.pos_tag(tokens_)
     chunks = nltk.ne_chunk(tags)
 
     entities = []
     for chunk in chunks:
         if hasattr(chunk, "label"):
-            words = []
-            for item in chunk:
-                words.append(item[0])
+            words = [w for w, _ in chunk]
             entities.append({
                 "entity": " ".join(words),
-                "label": chunk.label()
+                "type": chunk.label()
             })
-
-    return entities
+    return {"entities": entities}
